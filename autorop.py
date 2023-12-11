@@ -243,6 +243,15 @@ def main(parser):
     command_line = parser.execute.split()
     # print('cmd_line: ', command_line)
     exec = command_line[0]
+    if exec[0] != '/' or exec[0] != '.' or exec[0] != '~':
+        which = subprocess.Popen(['which', "{}".format(exec)],
+                                    stdout=subprocess.PIPE,
+                                    universal_newlines=True,
+                                    bufsize=0)
+        which.wait()
+        for line in which.stdout:
+            exec = line[:-1]
+
     args = command_line[1:]
     # print('args: ', args, '\n')
 
