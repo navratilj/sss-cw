@@ -17,5 +17,7 @@ Vagrant.configure("2") do |config|
     "sudo pip3 install capstone"
   config.vm.provision "shell", inline: 
     "sudo -H python3 -m pip install ROPgadget"
+    config.vm.provision "shell", inline: 
+    "sudo apt install radare2"
  end
 end
