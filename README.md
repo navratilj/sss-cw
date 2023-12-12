@@ -13,7 +13,8 @@ The tool and example files can be obtained by cloning https://github.com/navrati
 
 Requirements before using the tool:
 
-    - python3:
+    - python3
+    - python3-pip
     - gdb
     - gcc-multilib
     - capstone
