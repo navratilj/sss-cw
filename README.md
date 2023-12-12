@@ -79,21 +79,25 @@ Show NX is enabled: rabin2 -I <file>
 
 Show usage: python3 autorun.py -h
 
-Run and example command(/bin/sh, ls, ls -a -l, python...) without -a, then run ./<bin> <output>
+Run and example command(/bin/sh, ls, ls -a -l, python...) without -a option. 
+This should create a ROP chain and output it to rop-output. 
+Then run ./<bin> rop.output and your command should execute
 
 Run with the -a option to run automatically
 
 Change size of buffer in an example file to show that it works with different buffer size
 
-Run readelf -S <file> to show writeable memory spaces 
-Use -d to change to and address that contains a null byte, and explain how it works, but how you would change it if you had more time
+Run readelf -S <file> to show writeable memory spaces. These can be recognised by the letter W
+Use -d to change to and address that contains a null byte. 
+Had I had more time, if the address contained a null byte, it would search for a different W address
 
-Show the -badbytes option to find different gadgets (example: d5, 90, 61)
-RUN WITH ROPGADGET TO SHOW THE NEW GADGETS (show the bug in ROP gadget)
+The -badbytes option finds gadgets without the specified bytes in their address (example: d5, 90, 61)
+Their form is of <instruction_needed> ; (many pop instructions) ; ret
+If I had more time, I would extend the tool to find gadgets of form (many pop instructions) ; <instruction_needed> ; (many pop instructions) ; ret
 
-Show it works with nc:
+Running netcat:
 
-    untar 
+    untar using tar -xzf <file>
     ./configure
     make
     cp src/netcat /tmp/nc
@@ -101,7 +105,5 @@ Show it works with nc:
     left --> /tmp/nc -lnp 5678 -tte /bin/sh
     right --> /tmp/nc 127.0.0.1 5678
               pwd 
-
-Maybe some more commands
 
 That's all, thank you!
