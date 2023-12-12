@@ -18,6 +18,7 @@ Requirements before using the tool:
     - gdb
     - gcc-multilib
     - capstone
+    - radare2
     - ROPgadget (https://github.com/JonathanSalwan/ROPgadget)
 
 On Linux systems, these can be installed by running:
@@ -25,6 +26,7 @@ On Linux systems, these can be installed by running:
     sudo apt-get update -y
     sudo apt install -y python3-pip gdb gcc-multilib
     sudo pip3 install capstone
+    sudo apt install radare2
     sudo -H python3 -m pip install ROPgadget
 
 The provided Vagrantfile should automatically install them. If not, run:
@@ -64,8 +66,6 @@ The -badbytes BADBYTES argument enables you to not find gadgets with addresses t
 
 SHOWCASE EXAMPLE
 -------------------------------------------------------------------------
- 
-Run tmux, on the right side have README open
 
 Log in to the vagrant machine
 
