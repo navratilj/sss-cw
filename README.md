@@ -1,3 +1,19 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                            IMPORTANT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+!!! MY WORK DONE CONSISTS SOLELY OF THE autorun.py SCRIPT !!!
+!!! OTHER FILES IN THIS DIRECTORY ARE HERE ONLY FOR TESTING PURPOSES, WOULD THE USER WISH TO TEST OUT THE TOOL ON THEM !!!
+!!! I DO NOT TAKE CREDIT FOR THESE FILES !!!
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                                            IMPORTANT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+REQUIREMENTS
+-------------------------------------------------------------------------
+
 This tool can be used for generating ROP chains of arbitrary command lines
 Works on x86-32 bit programs with a buffer overflow vulnerability, such as the C strcpy function
 Tool can be obtained from the git repo 
